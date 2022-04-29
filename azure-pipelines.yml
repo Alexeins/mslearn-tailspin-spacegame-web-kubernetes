@@ -1,4 +1,5 @@
-trigger: none
+trigger:
+- 'main'
 
 variables:
   buildConfiguration: 'Release'
@@ -25,19 +26,34 @@ stages:
         tags: |
           $(tag)
 
+    - task: Docker@2 
+      displayName: 'Build and push the leaderboard image to container registry' 
+      inputs:
+        command: buildAndPush 
+        buildContext: $(Build.Repository.LocalPath)
+        repository: $(leaderboardRepository)
+        dockerfile: '$(Build.SourcesDirectory)/Tailspin.SpaceGame.LeaderboardContainer/Dockerfile'
+        containerRegistry: 'Container Registry Connection'
+        tags: |
+          $(tag)	
+    - publish: '$(Build.SourcesDirectory)/manifests'
+      artifact: manifests
+
 - stage: 'Deploy'
   displayName: 'Deploy the container'
   dependsOn: Build
   jobs:
-  - job: 'Deploy'
-    displayName: 'Deploy job'
+  - job: Deploy
+    displayName: Deploy
     pool:
       vmImage: 'ubuntu-20.04'
+      environment: 'AmbienteDeTest.default'
     variables:
     - group: Release
-    steps:
-    - task: AzureWebAppContainer@1
-      inputs:
-       appName: $(WebAppName)
-       azureSubscription: 'Resource Manager - Tailspin - Space Game'
-       imageName: $(RegistryName)/$(webRepository):$(build.buildId)
+    strategy: 
+      runOnce:
+        deploy:
+          steps:
+            - download: current
+              artifact: manifests
+
